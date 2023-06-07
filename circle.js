@@ -11,29 +11,45 @@ const sectorAngle = Math.PI / 2;
 // круг по центру
 const centerCircle = document.querySelector('.center-circle');
 
-// массив данных о секторе
+// данные всей системы
 let simpleCircle;
-let arraySectorsData = [];
 
 // конструктор для данных круга
-function SimpleCircle(spinCounter, arraySectorsData) {
+function SimpleCircle(spinCounter, sectors, animals) {
     this.spinCounter = spinCounter;
-    this.arraySectorsData = arraySectorsData;
+    this.sectors = sectors;
+    this.animals = animals;
+}
+
+// конструктор для данных животного
+function AnimalData(id, name, image_url, sector_id, damage, xp) {
+    this.id = id;
+    this.name = name;
+    this.image_url = image_url;
+    this.sector_id = sector_id;
+    this.damage = damage;
+    this.xp = xp;
 }
 
 // конструктор для данных сектора
-function SectorData(id, X, Y, imgLink, color, num1, num2) {
+function SectorData(id, X, Y, color) {
     this.id = id;
     this.X = X;
     this.Y = Y;
-    this.imgLink = imgLink;
-    this.text = `${num1} : ${num2}`;
     this.color = color;
 }
 
 // Генерация случайного целого числа от min до max
 function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+// Проверка что число секторов равно числу животных
+function checkInitData() {
+    let ans = simpleCircle.sectors.length === simpleCircle.animals.length;
+    if (!ans)
+        console.log("Error: Bad JSON init data. Different len of init arrays!");
+    return ans;
 }
 
 // Читаем JSON и заполняем объекты
@@ -51,16 +67,20 @@ function readJSON() {
     xhr.onload = function() {
         // Если статус запроса успешный (код 200)
         if (xhr.status === 200) {
+            let sectors = [];
+            let animals = [];
             // Парсим содержимое файла JSON в объект
             const json = JSON.parse(xhr.responseText);
-            for (const obj of json["sectors"]) {
-                let sectorData = new SectorData(obj.id, obj.X, obj.Y, obj.link, obj.color,getRandomInt(1, 10), getRandomInt(1, 10));
-                arraySectorsData.push(sectorData);
-            }
-            console.log(arraySectorsData);
-            simpleCircle = new SimpleCircle(json["spins_count"], arraySectorsData);
+
+            for (const obj of json["sectors"])
+                sectors.push(new SectorData(obj.id, obj.X, obj.Y, obj.color));
+
+            for (const obj of json["animals"])
+                animals.push(new AnimalData(obj.id, obj.name, obj.image_url, obj.sector_id, getRandomInt(1, 10), getRandomInt(1, 10)));
+
+            simpleCircle = new SimpleCircle(json["spins_count"], sectors, animals);
+
             console.log(simpleCircle);
-            console.log(`Total spin count: ${simpleCircle.spinCounter}`);
         }
     };
 
@@ -70,49 +90,7 @@ function readJSON() {
 
 // Пишем JSON
 function writeJSON() {
-    const data = {
-        spins_count: simpleCircle.spinCounter,
-        sectors: [
-            {
-                "id":    simpleCircle.arraySectorsData[0].id,
-                "X":     simpleCircle.arraySectorsData[0].X,
-                "Y":     simpleCircle.arraySectorsData[0].Y,
-                "color": simpleCircle.arraySectorsData[0].color,
-                "link":  simpleCircle.arraySectorsData[0].imgLink
-            },
-            {
-                "id":    simpleCircle.arraySectorsData[1].id,
-                "X":     simpleCircle.arraySectorsData[1].X,
-                "Y":     simpleCircle.arraySectorsData[1].Y,
-                "color": simpleCircle.arraySectorsData[1].color,
-                "link":  simpleCircle.arraySectorsData[1].imgLink
-            },
-            {
-                "id":   simpleCircle.arraySectorsData[2].id,
-                "X":    simpleCircle.arraySectorsData[2].X,
-                "Y":    simpleCircle.arraySectorsData[2].Y,
-                "color":simpleCircle.arraySectorsData[2].color,
-                "link": simpleCircle.arraySectorsData[2].imgLink
-            },
-            {
-                "id":   simpleCircle.arraySectorsData[3].id,
-                "X":    simpleCircle.arraySectorsData[3].X,
-                "Y":    simpleCircle.arraySectorsData[3].Y,
-                "color":simpleCircle.arraySectorsData[3].color,
-                "link": simpleCircle.arraySectorsData[3].imgLink
-            }
-        ]
-    };
-    const jsonString = JSON.stringify(data, null, 4);
-    console.log("JSON str:\n" + jsonString);
-}
-
-// Сопоставление пары x-y и пары startAngle-endAngle
-function nextCoordinatesPair(x, y) {
-    if(x === 1 && y === 1) return { X: 0, Y: 1 };
-    if(x === 0 && y === 1) return { X: 0, Y: 0 };
-    if(x === 0 && y === 0) return { X: 1, Y: 0 };
-    if(x === 1 && y === 0) return { X: 1, Y: 1 };
+    console.log("JSON str:\n" + JSON.stringify(simpleCircle, null, 4));
 }
 
 // Сопоставление пары x-y и пары startAngle-endAngle
@@ -146,7 +124,7 @@ function drawSector(X, Y, color, text, imgLink) {
     ctx.restore();
 
     ctx.fillStyle = '#000';
-    ctx.font = '12px Arial';
+    ctx.font = '11px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const textX = centerX + (radius / 2) * Math.cos((startAngle + endAngle) /  2);
@@ -163,17 +141,19 @@ function drawSector(X, Y, color, text, imgLink) {
 
 // Меняет координаты для поворота по часовой стрелке
 function turnClockwise() {
-    for (const sector of simpleCircle.arraySectorsData){
-        let nextCoordinates = nextCoordinatesPair(sector.X, sector.Y);
-        sector.X = nextCoordinates["X"];
-        sector.Y = nextCoordinates["Y"];
-    }
+    simpleCircle.animals.unshift(simpleCircle.animals.pop());
+    for (const animal of simpleCircle.animals)
+        animal.sector_id = (animal.sector_id + 1) % simpleCircle.animals.length
 }
 
 // Отрисовывает все сектора
 function drawSectors() {
-    for (const sector of simpleCircle.arraySectorsData)
-        drawSector(sector.X, sector.Y, sector.color, sector.text, sector.imgLink);
+    for(let i = 0; i < simpleCircle.sectors.length; ++i)
+        drawSector(simpleCircle.sectors[i].X,
+                   simpleCircle.sectors[i].Y,
+                   simpleCircle.sectors[i].color,
+              `${simpleCircle.animals[i].name}: ${simpleCircle.animals[i].damage}/${simpleCircle.animals[i].xp}`,
+                   simpleCircle.animals[i].image_url);
 }
 
 // Функция для изменения порядка секторов при клике на центральный круг
@@ -185,12 +165,13 @@ function changeSectorsOrder() {
     writeJSON();
 }
 
-centerCircle.addEventListener('click', changeSectorsOrder);
-
-
+// MAIN
 fillCircleWhite();
 readJSON();
 // даем время на чтение JSON
 setTimeout(() => {
-    drawSectors()
-}, 10);
+    if (checkInitData()){
+        centerCircle.addEventListener('click', changeSectorsOrder);
+        drawSectors();
+    }
+}, 100);
